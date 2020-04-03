@@ -55,6 +55,10 @@ products = [
     # Libraries
     # reentrant Qhull
     LibraryProduct(["libqhull_r", "qhull_r"], :libqhull_r),
+    
+    # Files
+    # libqhull_r.h - header file for libqhull_r, allows linking by MiniQhull and provides preprocessor macros.
+    FileProduct("includes/libqhull_r.h", :libqhull_r_h)
 ]
 
 # Dependencies that must be installed before this package can be built
