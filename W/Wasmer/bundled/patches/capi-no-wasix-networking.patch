@@ -1,0 +1,18 @@
+diff --git a/lib/c-api/Cargo.toml b/lib/c-api/Cargo.toml
+index aea8132..d6a4af7 100644
+--- a/lib/c-api/Cargo.toml
++++ b/lib/c-api/Cargo.toml
+@@ -36,7 +36,12 @@ wasmer-types = { version = "=7.5.0", path = "../types" }
+ wasmer-wasix = { path = "../wasix", version = "=0.705.0", features = [
+   "host-fs",
+   "host-vnet",
+-  "sys",
++  "sys-minimal",
++  "time",
++  "logging",
++  "sys-poll",
++  "host-threads",
++  "ctrlc",
+ ], default-features = false, optional = true }
+ anyhow.workspace = true
+ enumset.workspace = true
