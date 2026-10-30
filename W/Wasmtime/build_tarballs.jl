@@ -4,7 +4,8 @@ name = "Wasmtime"
 version = v"50.0.1"
 
 sources = [GitSource("https://github.com/bytecodealliance/wasmtime.git",
-                     "c307ec81de02852d815e9849f7c89d955c03c30d")]
+                     "c307ec81de02852d815e9849f7c89d955c03c30d";
+                     tag="v$(version)")]
 
 # Based on `wasmtime/ci/build-release-artifacts.sh
 script = raw"""
@@ -19,6 +20,7 @@ if [[ "${target}" == armv* ]] || [[ "${target}" == aarch64-linux* ]]; then
 fi
 
 cargo build \
+    --locked \
     --release \
     --target ${rust_target} \
     -p wasmtime-cli \
@@ -34,12 +36,9 @@ cmake ../../crates/c-api \
     -DCMAKE_BUILD_TYPE=Release \
     -DWASMTIME_TARGET=${rust_target} \
     -DCMAKE_INSTALL_PREFIX=${prefix} \
-    -DCMAKE_INSTALL_LIBDIR=${libdir}
+    -DCMAKE_INSTALL_LIBDIR=${libdir} \
+    -DWASMTIME_USER_CARGO_BUILD_OPTIONS=--locked
 cmake --build . --target install
-
-if [[ "${target}" == *-mingw* ]]; then
-    mv "${libdir}/wasmtime.dll" "${libdir}/libwasmtime.dll"
-fi
 
 install_license ${WORKSPACE}/srcdir/wasmtime/LICENSE
 """
@@ -53,7 +52,8 @@ platforms = supported_platforms(; exclude=(p -> !(arch(p) in ("x86_64", "aarch64
 filter!(p -> libc(p) != "musl", platforms)
 
 # NOTE: Headers get installed too but we aren't explicitly listing them as `FileProduct`s
-products = [LibraryProduct("libwasmtime", :libwasmtime),
+# On Windows the DLL keeps its upstream name `wasmtime.dll`, which is what `libwasmtime.dll.a` imports
+products = [LibraryProduct(["libwasmtime", "wasmtime"], :libwasmtime),
             ExecutableProduct("wasmtime", :wasmtime)]
 
 dependencies = Dependency[]
