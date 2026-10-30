@@ -1,0 +1,30 @@
+diff --git a/crates/c_api/src/error.rs b/crates/c_api/src/error.rs
+index 26d8d331..96fea105 100644
+--- a/crates/c_api/src/error.rs
++++ b/crates/c_api/src/error.rs
+@@ -1,4 +1,5 @@
+-use alloc::{boxed::Box, string::String};
++use crate::wasm_name_t;
++use alloc::{boxed::Box, format, string::String};
+ use core::ffi;
+ use wasmi::Error;
+ 
+@@ -42,6 +43,18 @@ pub extern "C" fn wasmi_error_new(msg: *const ffi::c_char) -> Option<Box<wasmi_e
+     Some(Box::new(wasmi_error_t::from(Error::new(msg_string))))
+ }
+ 
++/// Returns the string description of the [`wasmi_error_t`].
++///
++/// Stores the rendered error message (without a trailing NUL byte) in `message`.
++/// The caller is responsible for deallocating `message` with `wasm_byte_vec_delete`.
++///
++/// Wraps the [`core::fmt::Display`] implementation of [`wasmi::Error`].
++#[cfg_attr(not(feature = "prefix-symbols"), unsafe(no_mangle))]
++#[cfg_attr(feature = "prefix-symbols", wasmi_c_api_macros::prefix_symbol)]
++pub extern "C" fn wasmi_error_message(error: &wasmi_error_t, message: &mut wasm_name_t) {
++    message.set_buffer(format!("{}", error.inner).into_bytes().into());
++}
++
+ /// Convenience method, applies `ok_then(T)` if `result` is `Ok` and otherwise returns a [`wasmi_error_t`].
+ pub(crate) fn handle_result<T>(
+     result: Result<T>,

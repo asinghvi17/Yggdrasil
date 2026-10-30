@@ -1,0 +1,18 @@
+diff --git a/crates/c_api/include/wasmi/config.h b/crates/c_api/include/wasmi/config.h
+index 67baa751..6da721f1 100644
+--- a/crates/c_api/include/wasmi/config.h
++++ b/crates/c_api/include/wasmi/config.h
+@@ -108,11 +108,11 @@ WASMI_CONFIG_PROP(void, floats, bool)
+ enum wasmi_compilation_mode_enum {
+   /// Wasmi compiles and validates Wasm bytecode eagerly.
+   WASMI_COMPILATION_MODE_EAGER,
+-  /// Wasmi compiles and validates Wasm bytecode upon first use.
+-  WASMI_COMPILATION_MODE_LAZY,
+   /// Wasmi compiles Wasm bytecode upon first use but validates Wasm bytecode
+   /// eagerly.
+   WASMI_COMPILATION_MODE_LAZY_TRANSLATION,
++  /// Wasmi compiles and validates Wasm bytecode upon first use.
++  WASMI_COMPILATION_MODE_LAZY,
+ };
+ 
+ /**
