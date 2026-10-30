@@ -1,10 +1,10 @@
 using BinaryBuilder
 
 name = "Wasmtime"
-version = v"46.0.1"
+version = v"50.0.1"
 
 sources = [GitSource("https://github.com/bytecodealliance/wasmtime.git",
-                     "823d1b8f251494a06288194d0df746191f535ff7")]
+                     "c307ec81de02852d815e9849f7c89d955c03c30d")]
 
 # Based on `wasmtime/ci/build-release-artifacts.sh
 script = raw"""
@@ -40,14 +40,13 @@ cmake --build . --target install
 if [[ "${target}" == *-mingw* ]]; then
     mv "${libdir}/wasmtime.dll" "${libdir}/libwasmtime.dll"
 fi
+
+install_license ${WORKSPACE}/srcdir/wasmtime/LICENSE
 """
 
 platforms = supported_platforms(; exclude=(p -> !(arch(p) in ("x86_64", "aarch64"))))
 
-# Filter aarch64 FreeBSD because no Rust toolchain is available there yet
-filter!(p -> !(Sys.isfreebsd(p) && arch(p) == "aarch64"), platforms)
-
-# Filter musl because Rust >= 1.84 (Wasmtime 45 requires >= 1.93) assumes musl 1.2.3
+# Filter musl because Rust >= 1.84 (Wasmtime 50 requires >= 1.97) assumes musl 1.2.3
 # and emits hard references to `getrandom` and `posix_spawn_file_actions_addchdir_np`,
 # which our musl 1.1.19 does not provide.
 # See https://github.com/rust-lang/rust/issues/141795
