@@ -1,3 +1,16 @@
+Drop WASIX networking from the C API build.
+
+`wasmer-c-api`'s `wasi` feature enables `wasmer-wasix/sys`, which includes
+`host-reqwest` and so pulls in reqwest, rustls, `aws-lc-sys` and
+`rustls-platform-verifier`. These need a newer binutils (aarch64) and macOS SDK
+(x86_64) than BinaryBuilder's defaults, and make the library about 6 MB larger.
+The C API does not need WASIX networking, so enable the same wasix features as
+`sys` except `host-reqwest`, `journal` (does not compile without the others) and
+the `webc/mmap` / `virtual-mio/sys` ones, which cannot be spelled in a
+dependency feature list. WASI itself is unaffected.
+
+Upstream: not yet reported.
+
 diff --git a/lib/c-api/Cargo.toml b/lib/c-api/Cargo.toml
 index aea8132..d6a4af7 100644
 --- a/lib/c-api/Cargo.toml
