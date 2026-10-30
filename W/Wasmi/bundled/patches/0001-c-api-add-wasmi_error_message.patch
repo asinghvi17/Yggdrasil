@@ -1,3 +1,13 @@
+Add the missing `wasmi_error_message` function to the Wasmi C API.
+
+`wasmi/error.h` declares `wasmi_error_message`, but `crates/c_api/src/error.rs`
+never defines it, so any caller fails to link. This implements it as documented
+in the header: the error is rendered with `Display` into a `wasm_name_t` (no
+trailing NUL) that the caller frees with `wasm_byte_vec_delete`.
+
+Present at wasmi v2.0.0 and still on upstream main (f0c20dc5).
+Upstream: not yet reported
+
 diff --git a/crates/c_api/src/error.rs b/crates/c_api/src/error.rs
 index 26d8d331..96fea105 100644
 --- a/crates/c_api/src/error.rs

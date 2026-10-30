@@ -1,3 +1,12 @@
+Update the stale WASMI_VERSION macros in the C API header.
+
+`crates/c_api/include/wasmi.h` still defines WASMI_VERSION as "0.35.0"
+(MAJOR 0, MINOR 35) while the crate is version 2.0.0. This sets them to
+2.0.0 so C consumers and generated bindings see the right version.
+
+Present at wasmi v2.0.0 and still on upstream main (f0c20dc5).
+Upstream: not yet reported
+
 diff --git a/crates/c_api/include/wasmi.h b/crates/c_api/include/wasmi.h
 index 2caffa37..25942c7f 100644
 --- a/crates/c_api/include/wasmi.h

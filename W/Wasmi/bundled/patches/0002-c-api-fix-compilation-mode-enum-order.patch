@@ -1,3 +1,15 @@
+Make `enum wasmi_compilation_mode_enum` match the Rust implementation.
+
+`wasmi/config.h` orders the values EAGER, LAZY, LAZY_TRANSLATION, but the Rust
+`wasmi_compilation_mode_t` in `crates/c_api/src/config.rs` orders them EAGER,
+LAZY_TRANSLATION, LAZY. A C caller passing WASMI_COMPILATION_MODE_LAZY_TRANSLATION
+(1 in the header) therefore selected LAZY, and vice versa, so validation was
+skipped when eager validation was requested. This reorders the header to match
+the Rust values.
+
+Present at wasmi v2.0.0 and still on upstream main (f0c20dc5).
+Upstream: not yet reported
+
 diff --git a/crates/c_api/include/wasmi/config.h b/crates/c_api/include/wasmi/config.h
 index 67baa751..6da721f1 100644
 --- a/crates/c_api/include/wasmi/config.h
