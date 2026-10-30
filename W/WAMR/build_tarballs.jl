@@ -5,17 +5,27 @@ version = v"2.4.5"
 
 sources = [
     GitSource("https://github.com/wasm-micro-runtime/wasm-micro-runtime.git",
-              "25bd7eb63e828e4bd242cc9b38d260b4b31c6605"),  # WAMR-2.4.5
+              "25bd7eb63e828e4bd242cc9b38d260b4b31c6605";
+              tag="WAMR-$(version)"),
     DirectorySource("./bundled"),
 ]
 
 script = raw"""
 cd ${WORKSPACE}/srcdir/wasm-micro-runtime
 install_license LICENSE
+# The WASI "sandboxed-system-primitives" sources compiled into the library carry their
+# own licenses (BSD-2-Clause for src/, CC0 for include/); all three files are called
+# `LICENSE`, so install them under distinct names.
+SSP=core/iwasm/libraries/libc-wasi/sandboxed-system-primitives
+install -Dvm 644 ${SSP}/src/LICENSE ${prefix}/share/licenses/WAMR/LICENSE.sandboxed-system-primitives-src
+install -Dvm 644 ${SSP}/include/LICENSE ${prefix}/share/licenses/WAMR/LICENSE.sandboxed-system-primitives-include
 
 # Export the wasm-c-api (`wasm_*`) symbols: WAMR builds with `-fvisibility=hidden`
 # and only marks the `wasm_runtime_*` API as visible.
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/export-wasm-c-api-symbols.patch
+
+# musl 1.1.19 has no <sys/random.h>/getrandom(): use the /dev/urandom fallback for WASI
+atomic_patch -p1 ${WORKSPACE}/srcdir/patches/use-urandom-without-sys-random-h.patch
 
 # Map BinaryBuilder targets to WAMR's `WAMR_BUILD_PLATFORM` (the directory in
 # core/shared/platform) and `WAMR_BUILD_TARGET` (selects the `invokeNative` assembly).
@@ -34,6 +44,14 @@ case "${target}" in
     arm-*)     WAMR_TARGET=ARMV7_VFP ;;  # all our 32-bit ARM targets are hard-float
     riscv64-*) WAMR_TARGET=RISCV64 ;;
 esac
+
+# FreeBSD: upstream's product-mini/platforms/freebsd/CMakeLists.txt sets
+# `WAMR_DISABLE_HW_BOUND_CHECK 1` since the FreeBSD platform layer does not implement
+# the stack boundary query / signal-based bounds checking.
+EXTRA_FLAGS=()
+if [[ "${target}" == *-freebsd* ]]; then
+    EXTRA_FLAGS+=(-DWAMR_DISABLE_HW_BOUND_CHECK=1)
+fi
 
 # Only the interpreters (classic + fast) are built: no AOT loader, no LLVM JIT.
 # The root CMakeLists.txt fetches SIMDe with `FetchContent` at configure time, which
@@ -56,7 +74,8 @@ cmake -B build -S . \
     -DWAMR_BUILD_SHARED_MEMORY=1 \
     -DWAMR_BUILD_SIMD=1 \
     -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
-    -DFETCHCONTENT_SOURCE_DIR_SIMDE=${includedir}
+    -DFETCHCONTENT_SOURCE_DIR_SIMDE=${includedir} \
+    "${EXTRA_FLAGS[@]}"
 cmake --build build --parallel ${nproc}
 cmake --install build
 
@@ -83,5 +102,8 @@ dependencies = [
     BuildDependency(PackageSpec(name="SIMDe_jll", version=v"0.8.2")),
 ]
 
+# GCC >= 8 (first BinaryBuilder shard with it; 7.1.0 predates the 7.3 backport) is needed
+# for `-mindirect-branch-register`, which upstream's CMakeLists.txt adds on x86 whenever
+# the compiler is not Clang (the default GCC 4.8.5 rejects it).
 build_tarballs(ARGS, name, version, sources, script, platforms, products, dependencies;
-               julia_compat="1.6")
+               julia_compat="1.6", preferred_gcc_version=v"8")

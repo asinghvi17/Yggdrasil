@@ -1,3 +1,12 @@
+Export the wasm-c-api (`wasm_*`) symbols from the shared library on GCC/Clang.
+
+The top-level CMakeLists.txt compiles with `-fvisibility=hidden`, and
+`WASM_API_EXTERN` is empty outside of MSVC, so none of the wasm-c-api functions
+(`wasm_engine_new`, `wasm_module_new`, ...) end up in the dynamic symbol table of
+libiwasm.so/.dylib; only `wasm_runtime_*` is exported (via `WASM_RUNTIME_API_EXTERN`).
+
+This should be sent upstream (no upstream issue/PR exists yet).
+
 diff --git a/core/iwasm/include/wasm_c_api.h b/core/iwasm/include/wasm_c_api.h
 index 241a0ee..00920ad 100644
 --- a/core/iwasm/include/wasm_c_api.h
