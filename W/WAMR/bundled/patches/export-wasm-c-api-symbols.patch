@@ -1,0 +1,13 @@
+diff --git a/core/iwasm/include/wasm_c_api.h b/core/iwasm/include/wasm_c_api.h
+index 241a0ee..00920ad 100644
+--- a/core/iwasm/include/wasm_c_api.h
++++ b/core/iwasm/include/wasm_c_api.h
+@@ -22,6 +22,8 @@
+ #else
+ #define WASM_API_EXTERN __declspec(dllimport)
+ #endif
++#elif defined(__GNUC__) || defined(__clang__)
++#define WASM_API_EXTERN __attribute__((visibility("default")))
+ #else
+ #define WASM_API_EXTERN
+ #endif
