@@ -10,7 +10,7 @@ sources = [
     # Git submodule `lib/napi` of wasmer v7.5.0. It is a member of the cargo workspace,
     # so it has to be present for cargo to load the workspace, even though we don't build it.
     GitSource("https://github.com/wasmerio/napi",
-              "82b328f50ddaac78de388b67b4707f21864b9245"; unpack_target="napi"),
+              "82b328f50ddaac78de388b67b4707f21864b9245"),
 ]
 
 # Based on the `build-capi` and `package-capi` targets of wasmer/Makefile.
@@ -42,11 +42,9 @@ cargo build \
     --no-default-features \
     --features wat,sys-default,compiler,cranelift,wasi,middlewares
 
-# The library is named `wasmer`: libwasmer.so, libwasmer.dylib or wasmer.dll
+# The library is named `wasmer`: libwasmer.so or libwasmer.dylib
 mkdir -p ${libdir} ${includedir}
-if [[ "${target}" == *-mingw* ]]; then
-    install -Dvm 0755 "target/${rust_target}/release/wasmer.dll" "${libdir}/libwasmer.dll"
-elif [[ "${target}" == *-apple-* ]]; then
+if [[ "${target}" == *-apple-* ]]; then
     install -Dvm 0755 "target/${rust_target}/release/libwasmer.dylib" "${libdir}/libwasmer.dylib"
 else
     install -Dvm 0755 "target/${rust_target}/release/libwasmer.so" "${libdir}/libwasmer.so"
@@ -58,24 +56,33 @@ install -Dvm 0644 lib/c-api/wasmer_wasm.h "${includedir}/wasmer_wasm.h"
 install -Dvm 0644 lib/c-api/tests/wasm-c-api/include/wasm.h "${includedir}/wasm.h"
 install -Dvm 0644 lib/c-api/tests/wasm-c-api/include/wasm.hh "${includedir}/wasm.hh"
 
+# The `wasm.h`/`wasm.hh` headers come from the bundled `wasm-c-api` project
 install_license LICENSE
+# (Both files are called LICENSE, so `install_license` can't install them together)
+install -Dvm 0644 lib/c-api/tests/wasm-c-api/LICENSE "${prefix}/share/licenses/wasm-c-api/LICENSE"
 """
 
 # Wasmer's compilers only support 64-bit targets, and upstream only ships x86_64 and aarch64
+# (plus riscv64, see below)
 platforms = supported_platforms(; exclude=(p -> !(arch(p) in ("x86_64", "aarch64"))))
 
-# Filter aarch64 FreeBSD because no Rust toolchain is available there yet
-filter!(p -> !(Sys.isfreebsd(p) && arch(p) == "aarch64"), platforms)
-
-# Filter x86_64 FreeBSD: it is not in upstream's release matrix (Linux gnu, macOS, and
-# x86_64-pc-windows-gnu), so it is untested there.
-filter!(p -> !Sys.isfreebsd(p), platforms)
+# Filter Windows: Wasmer 7.5.0 rejects the Cranelift, Singlepass and LLVM compilers there
+# with `compile_error!` ("Use the V8 backend instead"). The only Windows backend is V8,
+# whose build script downloads a prebuilt `v8-windows-amd64.tar.xz` from
+# https://github.com/wasmerio/wee8-custom-builds, which is not acceptable for Yggdrasil.
+filter!(p -> !Sys.iswindows(p), platforms)
 
 # Filter musl because Rust >= 1.84 (Wasmer 7.5 requires >= 1.96) assumes musl 1.2.3
 # and emits hard references to `getrandom` and `posix_spawn_file_actions_addchdir_np`,
 # which our musl 1.1.19 does not provide. Upstream also builds no musl C API.
 # See https://github.com/rust-lang/rust/issues/141795
 filter!(p -> libc(p) != "musl", platforms)
+
+# NOTE: riscv64-linux-gnu is deliberately not built. Upstream builds it in CI, but there
+# `wasmer-wasix` switches `reqwest` from rustls to `native-tls` (OpenSSL) on riscv64, which
+# would need an `OpenSSL_jll` dependency and extra environment that we cannot test here.
+# NOTE: FreeBSD is not in upstream's release matrix, but `wasmer-vm` has explicit trap
+# handler support for x86_64 and aarch64 FreeBSD. This is untested.
 
 # NOTE: Headers get installed too but we aren't explicitly listing them as `FileProduct`s
 products = [LibraryProduct("libwasmer", :libwasmer)]
