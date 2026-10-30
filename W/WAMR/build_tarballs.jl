@@ -1,5 +1,8 @@
 using BinaryBuilder, Pkg
 
+const YGGDRASIL_DIR = "../.."
+include(joinpath(YGGDRASIL_DIR, "platforms", "macos_sdks.jl"))
+
 name = "WAMR"
 version = v"2.4.5"
 
@@ -87,6 +90,10 @@ cmake --install build
 # The CMake config files reference the build-time options and are of no use to us
 rm -rf ${libdir}/cmake
 """
+
+# WASI's timestamp code uses `futimens`, `utimensat`, `UTIME_NOW` and `UTIME_OMIT`, which are
+# only available from macOS 10.13 (the default Intel macOS SDK is 10.12)
+sources, script = require_macos_sdk("10.13", sources, script)
 
 # WAMR has `invokeNative` assembly (needed for host function calls) for these architectures.
 # Not supported: powerpc64le (no `invokeNative` implementation), armv6l (untested upstream).
