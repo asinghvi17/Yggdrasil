@@ -24,6 +24,9 @@ install -Dvm 644 ${SSP}/include/LICENSE ${prefix}/share/licenses/WAMR/LICENSE.sa
 # and only marks the `wasm_runtime_*` API as visible.
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/export-wasm-c-api-symbols.patch
 
+# Per-thread native stack boundary, for Julia tasks which run on their own stacks
+atomic_patch -p1 ${WORKSPACE}/srcdir/patches/thread-native-stack-boundary.patch
+
 # musl 1.1.19 has no <sys/random.h>/getrandom(): use the /dev/urandom fallback for WASI
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/use-urandom-without-sys-random-h.patch
 
@@ -45,13 +48,14 @@ case "${target}" in
     riscv64-*) WAMR_TARGET=RISCV64 ;;
 esac
 
-# FreeBSD: upstream's product-mini/platforms/freebsd/CMakeLists.txt sets
-# `WAMR_DISABLE_HW_BOUND_CHECK 1` since the FreeBSD platform layer does not implement
-# the stack boundary query / signal-based bounds checking.
-EXTRA_FLAGS=()
-if [[ "${target}" == *-freebsd* ]]; then
-    EXTRA_FLAGS+=(-DWAMR_DISABLE_HW_BOUND_CHECK=1)
-fi
+# WAMR is embedded into a host runtime (Julia) that owns SIGSEGV/SIGBUS (GC safepoints)
+# and SIGUSR1 (profiling), and WAMR's default signal handlers would clobber Julia's:
+#   WAMR_DISABLE_HW_BOUND_CHECK=1      software memory bounds checks instead of a SIGSEGV
+#                                      handler (costs ~6% on a memory-bound loop). Upstream's
+#                                      product-mini/platforms/freebsd/CMakeLists.txt sets this
+#                                      too, since FreeBSD has no stack boundary query.
+#   WAMR_DISABLE_WAKEUP_BLOCKING_OP=1  no SIGUSR1 handler / signal mask changes
+# With these libiwasm has no `sigaction` import. This applies to all platforms.
 
 # Only the interpreters (classic + fast) are built: no AOT loader, no LLVM JIT.
 # The root CMakeLists.txt fetches SIMDe with `FetchContent` at configure time, which
@@ -73,9 +77,10 @@ cmake -B build -S . \
     -DWAMR_BUILD_LIB_PTHREAD=1 \
     -DWAMR_BUILD_SHARED_MEMORY=1 \
     -DWAMR_BUILD_SIMD=1 \
+    -DWAMR_DISABLE_HW_BOUND_CHECK=1 \
+    -DWAMR_DISABLE_WAKEUP_BLOCKING_OP=1 \
     -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
-    -DFETCHCONTENT_SOURCE_DIR_SIMDE=${includedir} \
-    "${EXTRA_FLAGS[@]}"
+    -DFETCHCONTENT_SOURCE_DIR_SIMDE=${includedir}
 cmake --build build --parallel ${nproc}
 cmake --install build
 

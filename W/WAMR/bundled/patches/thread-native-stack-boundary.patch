@@ -1,0 +1,62 @@
+Add wasm_runtime_set_thread_native_stack_boundary().
+
+By default every exec env records the native stack boundary of the OS thread stack
+(`os_thread_get_stack_boundary()`). For embedders whose "threads" run on their own
+stacks (e.g. Julia tasks, which have their own stacks), this boundary is wrong, and it
+cannot be fixed via `wasm_runtime_set_native_stack_boundary()` for exec envs that the
+runtime creates internally (e.g. to run start functions during instantiation). This adds
+a per-thread override that is used for all exec envs subsequently created on the calling
+thread (NULL restores the default).
+
+Upstream: not yet reported.
+
+diff --git a/core/iwasm/common/wasm_exec_env.c b/core/iwasm/common/wasm_exec_env.c
+index 4775295..5fa8718 100644
+--- a/core/iwasm/common/wasm_exec_env.c
++++ b/core/iwasm/common/wasm_exec_env.c
+@@ -277,6 +277,17 @@ wasm_exec_env_restore_module_inst(
+     }
+ }
+ 
++/* Per-thread override of the native stack boundary used for exec envs created
++   on this thread (including the ones the runtime creates internally, e.g. to
++   run start functions). For embedders whose "threads" run on their own stacks. */
++static os_thread_local_attribute uint8 *thread_native_stack_boundary = NULL;
++
++void
++wasm_runtime_set_thread_native_stack_boundary(uint8_t *native_stack_boundary)
++{
++    thread_native_stack_boundary = native_stack_boundary;
++}
++
+ void
+ wasm_exec_env_set_thread_info(WASMExecEnv *exec_env)
+ {
+@@ -288,6 +299,8 @@ wasm_exec_env_set_thread_info(WASMExecEnv *exec_env)
+         /* WASM_STACK_GUARD_SIZE isn't added for flexibility to developer,
+            he must ensure that enough guard bytes are kept. */
+         exec_env->native_stack_boundary = exec_env->user_native_stack_boundary;
++    else if (thread_native_stack_boundary)
++        exec_env->native_stack_boundary = thread_native_stack_boundary;
+     else {
+         uint8 *stack_boundary = os_thread_get_stack_boundary();
+         exec_env->native_stack_boundary =
+diff --git a/core/iwasm/include/wasm_export.h b/core/iwasm/include/wasm_export.h
+index 81efb8f..fc15322 100644
+--- a/core/iwasm/include/wasm_export.h
++++ b/core/iwasm/include/wasm_export.h
+@@ -1862,6 +1862,14 @@ WASM_RUNTIME_API_EXTERN void
+ wasm_runtime_set_native_stack_boundary(wasm_exec_env_t exec_env,
+                                        uint8_t *native_stack_boundary);
+ 
++/**
++ * Set the native stack boundary used for every exec env subsequently created
++ * on the calling thread (pass NULL to restore the default). Like
++ * wasm_runtime_set_native_stack_boundary, no guard size is added.
++ */
++WASM_RUNTIME_API_EXTERN void
++wasm_runtime_set_thread_native_stack_boundary(uint8_t *native_stack_boundary);
++
+ /**
+  * Set the instruction count limit to the execution environment.
+  * By default the instruction count limit is -1, which means no limit.
