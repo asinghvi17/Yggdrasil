@@ -26,12 +26,16 @@ sources = [
 #   `sys` by the same list of wasix features minus `host-reqwest`, `journal` (does not
 #   compile without the other features) and the mmap/mio ones that are not needed.
 #   WASI itself (`wasi_env_new`, `wasi_get_imports`, ...) is unaffected.
+# - `wasmer` (lib/api) has an unconditional `bindgen` build-dependency that is only used by the
+#   `v8` backend. On a musl build host it uses clang-sys' `static` feature, which needs
+#   `libclang.a`, so the second patch makes it optional (enabled by `v8` only).
 # - `wasi` enables WASI/WASIX (`wasi_*` functions), `wat` enables `wat2wasm` and
 #   `wasm_module_new` on text input, `middlewares` is part of upstream's default set.
 script = raw"""
 cd ${WORKSPACE}/srcdir/wasmer/
 
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/capi-no-wasix-networking.patch
+atomic_patch -p1 ${WORKSPACE}/srcdir/patches/api-optional-bindgen.patch
 
 # The `lib/napi` submodule is not part of the git checkout
 rm -rf lib/napi
