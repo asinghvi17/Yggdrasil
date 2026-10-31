@@ -25,6 +25,10 @@ jobs:
         include:
           - recipe: W/WAMR
             platform: x86_64-linux-gnu
+          # Control: small recipe without Pkg-resolved build dependencies, to
+          # separate CI/sandbox problems from recipe problems.
+          - recipe: Z/Zlib/Zlib@1.3.1
+            platform: x86_64-linux-gnu
     env:
       # Same package server settings as .buildkite/pipeline.yml
       JULIA_PKG_SERVER: us-east.pkg.julialang.org
@@ -88,7 +92,7 @@ jobs:
 
       - name: Compute artifact name
         id: artifact
-        run: echo "name=$(echo '${{ matrix.recipe }}' | tr / -)-${{ matrix.platform }}" >> "$GITHUB_OUTPUT"
+        run: echo "name=$(echo '${{ matrix.recipe }}' | tr '/@' --)-${{ matrix.platform }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload products
         if: success()
