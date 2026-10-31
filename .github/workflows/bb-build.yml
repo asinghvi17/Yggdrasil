@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - as/bb-ci
+      - as/bb-ci-wasmtime
 
 permissions:
   contents: read
@@ -56,40 +57,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {recipe: W/WAMR, platform: i686-linux-gnu}
-          - {recipe: W/WAMR, platform: x86_64-linux-gnu}
-          - {recipe: W/WAMR, platform: aarch64-linux-gnu}
-          - {recipe: W/WAMR, platform: armv7l-linux-gnueabihf}
-          - {recipe: W/WAMR, platform: riscv64-linux-gnu}
-          - {recipe: W/WAMR, platform: i686-linux-musl}
-          - {recipe: W/WAMR, platform: x86_64-linux-musl}
-          - {recipe: W/WAMR, platform: aarch64-linux-musl}
-          - {recipe: W/WAMR, platform: armv7l-linux-musleabihf}
-          - {recipe: W/WAMR, platform: x86_64-apple-darwin}
-          - {recipe: W/WAMR, platform: aarch64-apple-darwin}
-          - {recipe: W/WAMR, platform: x86_64-unknown-freebsd}
-          - {recipe: W/WAMR, platform: aarch64-unknown-freebsd}
-          - {recipe: W/Wasmtime, platform: x86_64-linux-gnu}
-          - {recipe: W/Wasmtime, platform: aarch64-linux-gnu}
           - {recipe: W/Wasmtime, platform: x86_64-apple-darwin}
           - {recipe: W/Wasmtime, platform: aarch64-apple-darwin}
-          - {recipe: W/Wasmtime, platform: x86_64-unknown-freebsd}
-          - {recipe: W/Wasmtime, platform: aarch64-unknown-freebsd}
-          - {recipe: W/Wasmtime, platform: x86_64-w64-mingw32}
-          - {recipe: W/Wasmer, platform: x86_64-linux-gnu}
-          - {recipe: W/Wasmer, platform: aarch64-linux-gnu}
-          - {recipe: W/Wasmer, platform: riscv64-linux-gnu}
-          - {recipe: W/Wasmer, platform: x86_64-apple-darwin}
-          - {recipe: W/Wasmer, platform: aarch64-apple-darwin}
-          - {recipe: W/Wasmer, platform: x86_64-unknown-freebsd}
-          - {recipe: W/Wasmer, platform: aarch64-unknown-freebsd}
-          - {recipe: W/Wasmi, platform: x86_64-linux-gnu}
-          - {recipe: W/Wasmi, platform: aarch64-linux-gnu}
-          - {recipe: W/Wasmi, platform: x86_64-apple-darwin}
-          - {recipe: W/Wasmi, platform: aarch64-apple-darwin}
-          - {recipe: W/Wasmi, platform: x86_64-unknown-freebsd}
-          - {recipe: W/Wasmi, platform: aarch64-unknown-freebsd}
-          - {recipe: W/Wasmi, platform: x86_64-w64-mingw32}
     env:
       BB_PROJECT: ${{ github.workspace }}/.ci/bb1_project
       # Accept the macOS SDK license automatically (as Yggdrasil CI does)
