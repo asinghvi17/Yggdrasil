@@ -36,8 +36,9 @@ sources = [
 #   `__unw_add_find_dynamic_unwind_sections`, which is only in the macOS 14 libSystem, so the
 #   default 11.1 SDK fails to link. We link against the 14.0 SDK and so require macOS 14.
 #   x86_64 macOS doesn't use compact unwind and keeps the default SDK and deployment target.
-# - cc-rs passes `-march=rv64gc` on riscv64 for `wasmer-compiler`'s `libunwind.c`, which
-#   BinaryBuilder's compiler wrapper rejects, so the third patch disables the default flags there.
+# - On riscv64, cc-rs (`wasmer-compiler`'s `libunwind.c`, `zstd-sys`, ...) passes `-march=rv64gc`,
+#   which BinaryBuilder's compiler wrapper rejects (it already targets riscv64gc). So cc-rs'
+#   default flags are disabled there, and the ones that matter are passed explicitly.
 # - `wasi` enables WASI/WASIX (`wasi_*` functions), `wat` enables `wat2wasm` and
 #   `wasm_module_new` on text input, `middlewares` is part of upstream's default set.
 script = raw"""
@@ -45,13 +46,19 @@ cd ${WORKSPACE}/srcdir/wasmer/
 
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/capi-no-wasix-networking.patch
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/api-optional-bindgen.patch
-atomic_patch -p1 ${WORKSPACE}/srcdir/patches/compiler-riscv64-no-march.patch
 
 # The `lib/napi` submodule is not part of the git checkout
 rm -rf lib/napi
 cp -r ${WORKSPACE}/srcdir/napi lib/napi
 
 export CARGO_PROFILE_RELEASE_STRIP=debuginfo
+
+if [[ "${target}" == riscv64-* ]]; then
+    export CRATE_CC_NO_DEFAULTS=1
+    export "CFLAGS_${rust_target//-/_}=-O2 -fPIC -ffunction-sections -fdata-sections"
+    # `CRATE_CC_NO_DEFAULTS` also applies to the host (x86_64) build scripts
+    export HOST_CFLAGS="-O2 -fPIC"
+fi
 
 cargo build \
     --release \
