@@ -96,4 +96,7 @@ products = [LibraryProduct("libwasmer", :libwasmer)]
 dependencies = Dependency[]
 
 build_tarballs(ARGS, name, version, sources, script, platforms, products, dependencies;
-               compilers=[:c, :rust], julia_compat="1.6")
+               compilers=[:c, :rust], julia_compat="1.6",
+               # cc-rs passes `-march=rv64gc -mabi=lp64d` on riscv64 (for wasmer-compiler's
+               # `libunwind.c`), which BinaryBuilder's compiler wrapper rejects by default
+               lock_microarchitecture=false)
