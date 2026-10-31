@@ -1,8 +1,12 @@
-# Build a Yggdrasil recipe with BinaryBuilder on a GitHub-hosted runner.
+# Build Yggdrasil recipes with BinaryBuilder on GitHub-hosted runners.
 #
-# Runs on every push to `as/bb-ci`. Add (recipe, platform) pairs to the matrix
-# below to build more. Mirrors what `.buildkite/build.sh` does for BB1 recipes:
-# instantiate `.ci/bb1_project` (BinaryBuilder master) and run the recipe's
+# Runs on every push to `as/bb-ci`. One job per (recipe, platform). The platform
+# lists below were computed from each recipe with BinaryBuilder's own platform
+# expansion (`build_tarballs.jl --meta-json=...` + `.ci/bb1_project/generate_platforms.jl`);
+# regenerate them if a recipe's `platforms` change.
+#
+# Mirrors what `.buildkite/build.sh` does for BB1 recipes: instantiate
+# `.ci/bb1_project` (BinaryBuilder master) and run the recipe's
 # `build_tarballs.jl --verbose <platform>` with that project.
 name: BinaryBuilder build
 
@@ -14,25 +18,79 @@ on:
 permissions:
   contents: read
 
+env:
+  # Same package server settings as .buildkite/pipeline.yml
+  JULIA_PKG_SERVER: us-east.pkg.julialang.org
+  JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+  JULIA_VERSION: '1.13.2' # Same version as .buildkite/pipeline.yml and the Manifests
+
 jobs:
+  # The only job that writes the depot cache: it instantiates and precompiles the
+  # BinaryBuilder project once, and the build jobs restore that (restore-only).
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: ${{ env.JULIA_VERSION }}
+      - name: Cache Julia depot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/clones
+          key: bb-depot-${{ runner.os }}-${{ env.JULIA_VERSION }}-${{ hashFiles('.ci/bb1_project/Manifest.toml') }}
+      - name: Instantiate BinaryBuilder project
+        run: julia --color=yes --project=.ci/bb1_project -e 'import Pkg; Pkg.instantiate(); Pkg.precompile()'
+
   build:
     name: ${{ matrix.recipe }} (${{ matrix.platform }})
+    needs: prepare
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
         include:
-          - recipe: W/WAMR
-            platform: x86_64-linux-gnu
-          # Control: small recipe without Pkg-resolved build dependencies, to
-          # separate CI/sandbox problems from recipe problems.
-          - recipe: Z/Zlib/Zlib@1.3.1
-            platform: x86_64-linux-gnu
+          - {recipe: W/WAMR, platform: i686-linux-gnu}
+          - {recipe: W/WAMR, platform: x86_64-linux-gnu}
+          - {recipe: W/WAMR, platform: aarch64-linux-gnu}
+          - {recipe: W/WAMR, platform: armv7l-linux-gnueabihf}
+          - {recipe: W/WAMR, platform: riscv64-linux-gnu}
+          - {recipe: W/WAMR, platform: i686-linux-musl}
+          - {recipe: W/WAMR, platform: x86_64-linux-musl}
+          - {recipe: W/WAMR, platform: aarch64-linux-musl}
+          - {recipe: W/WAMR, platform: armv7l-linux-musleabihf}
+          - {recipe: W/WAMR, platform: x86_64-apple-darwin}
+          - {recipe: W/WAMR, platform: aarch64-apple-darwin}
+          - {recipe: W/WAMR, platform: x86_64-unknown-freebsd}
+          - {recipe: W/WAMR, platform: aarch64-unknown-freebsd}
+          - {recipe: W/Wasmtime, platform: x86_64-linux-gnu}
+          - {recipe: W/Wasmtime, platform: aarch64-linux-gnu}
+          - {recipe: W/Wasmtime, platform: x86_64-apple-darwin}
+          - {recipe: W/Wasmtime, platform: aarch64-apple-darwin}
+          - {recipe: W/Wasmtime, platform: x86_64-unknown-freebsd}
+          - {recipe: W/Wasmtime, platform: aarch64-unknown-freebsd}
+          - {recipe: W/Wasmtime, platform: x86_64-w64-mingw32}
+          - {recipe: W/Wasmer, platform: x86_64-linux-gnu}
+          - {recipe: W/Wasmer, platform: aarch64-linux-gnu}
+          - {recipe: W/Wasmer, platform: riscv64-linux-gnu}
+          - {recipe: W/Wasmer, platform: x86_64-apple-darwin}
+          - {recipe: W/Wasmer, platform: aarch64-apple-darwin}
+          - {recipe: W/Wasmer, platform: x86_64-unknown-freebsd}
+          - {recipe: W/Wasmer, platform: aarch64-unknown-freebsd}
+          - {recipe: W/Wasmi, platform: x86_64-linux-gnu}
+          - {recipe: W/Wasmi, platform: aarch64-linux-gnu}
+          - {recipe: W/Wasmi, platform: x86_64-apple-darwin}
+          - {recipe: W/Wasmi, platform: aarch64-apple-darwin}
+          - {recipe: W/Wasmi, platform: x86_64-unknown-freebsd}
+          - {recipe: W/Wasmi, platform: aarch64-unknown-freebsd}
+          - {recipe: W/Wasmi, platform: x86_64-w64-mingw32}
     env:
-      # Same package server settings as .buildkite/pipeline.yml
-      JULIA_PKG_SERVER: us-east.pkg.julialang.org
-      JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       BB_PROJECT: ${{ github.workspace }}/.ci/bb1_project
       # Accept the macOS SDK license automatically (as Yggdrasil CI does)
       BINARYBUILDER_AUTOMATIC_APPLE: "true"
@@ -48,7 +106,7 @@ jobs:
 
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
-          version: '1.13.2' # Same version as .buildkite/pipeline.yml and the Manifests
+          version: ${{ env.JULIA_VERSION }}
 
       # BinaryBuilder's sandbox needs unprivileged user namespaces, which
       # Ubuntu 24.04 restricts through AppArmor.
@@ -58,21 +116,15 @@ jobs:
           sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
           unshare --user --map-root-user --mount true && echo "user namespaces OK"
 
-      # Packages and artifacts (including the BinaryBuilder rootfs and compiler
-      # shards, which are the bulk of the download) live in the Julia depot.
-      - name: Cache Julia depot
-        uses: actions/cache@v4
+      - name: Restore Julia depot
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.julia/packages
             ~/.julia/artifacts
             ~/.julia/compiled
-            ~/.julia/scratchspaces
             ~/.julia/clones
-          key: bb-depot-${{ runner.os }}-${{ hashFiles('.ci/bb1_project/Manifest.toml') }}-${{ matrix.recipe }}-${{ matrix.platform }}
-          restore-keys: |
-            bb-depot-${{ runner.os }}-${{ hashFiles('.ci/bb1_project/Manifest.toml') }}-
-            bb-depot-${{ runner.os }}-
+          key: bb-depot-${{ runner.os }}-${{ env.JULIA_VERSION }}-${{ hashFiles('.ci/bb1_project/Manifest.toml') }}
 
       - name: Instantiate BinaryBuilder project
         run: julia --color=yes --project="$BB_PROJECT" -e 'import Pkg; Pkg.instantiate(); Pkg.precompile()'
