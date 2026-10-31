@@ -1,0 +1,39 @@
+Make the `bindgen` build-dependency of `wasmer` optional, enabled only by `v8`.
+
+`lib/api/build.rs` only uses bindgen in `build_v8()`, behind `cfg(feature = "v8")`,
+but `bindgen` is an unconditional build-dependency. On musl build hosts (such as
+BinaryBuilder's) it is configured with `features = ["static"]`, which makes clang-sys
+link libclang statically and its build script fails with "could not find the required
+libclang.a static library". The C API does not use the v8 backend, so don't build
+bindgen/clang-sys at all. `Cargo.lock` is unchanged (optional dependencies are
+locked too), so `--locked` still works.
+
+Upstream: not yet reported.
+
+diff --git a/lib/api/Cargo.toml b/lib/api/Cargo.toml
+index d666f85..c24f22e 100644
+--- a/lib/api/Cargo.toml
++++ b/lib/api/Cargo.toml
+@@ -154,7 +154,7 @@ cranelift = ["compiler", "wasmer-compiler-cranelift"]
+ llvm = ["compiler", "wasmer-compiler-llvm"]
+ 
+ # --- Enable the v8 backend and use it as default backend.
+-v8 = ["wasm-c-api", "std", "dep:tempfile", "dep:which", "dep:xz", "dep:ureq"]
++v8 = ["wasm-c-api", "std", "dep:bindgen", "dep:tempfile", "dep:which", "dep:xz", "dep:ureq"]
+ # --- Enable the v8 backend and use it as defaul backend only if it is the only one enabled.
+ v8-default = ["v8", "wat"]
+ 
+@@ -200,11 +200,11 @@ xz = { workspace = true, optional = true }
+ zip = { workspace = true, optional = true, features = ["deflate"] }
+ 
+ [target.'cfg(not(target_env = "musl"))'.build-dependencies]
+-bindgen = { workspace = true, default-features = true }
++bindgen = { workspace = true, default-features = true, optional = true }
+ 
+ # musl does not support dlopen/dlsym functionality used by the bindgen (using libclang).
+ [target.'cfg(target_env = "musl")'.build-dependencies]
+-bindgen = { workspace = true, default-features = false, features = [
++bindgen = { workspace = true, default-features = false, optional = true, features = [
+   "logging",
+   "prettyplease",
+   "static",
