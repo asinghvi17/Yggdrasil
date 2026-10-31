@@ -111,7 +111,7 @@ products = [
 
 dependencies = [
     # Header-only; provides `simde/wasm/simd128.h` for the fast interpreter's SIMD support
-    BuildDependency(PackageSpec(name="SIMDe_jll", version=v"0.8.2")),
+    BuildDependency("SIMDe_jll"),
 ]
 
 # GCC >= 8 (first BinaryBuilder shard with it; 7.1.0 predates the 7.3 backport) is needed
