@@ -122,7 +122,10 @@ jobs:
         working-directory: ${{ matrix.recipe }}
         run: |
           mkdir -p "$RUNNER_TEMP/extract" && cd "$RUNNER_TEMP/extract"
-          tar xzf "$GITHUB_WORKSPACE/${{ matrix.recipe }}"/products/*.tar.gz
+          for t in "$GITHUB_WORKSPACE/${{ matrix.recipe }}"/products/*.tar.gz; do
+            case "$t" in *-logs.*) continue ;; esac
+            tar xzf "$t"
+          done
           for f in $(find . -name 'libiwasm*' -type f); do
             echo "== $f"
             readelf -lW "$f" | grep -E 'GNU_STACK'
