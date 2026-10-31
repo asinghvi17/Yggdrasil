@@ -26,7 +26,9 @@ jobs:
           - recipe: W/WAMR
             platform: x86_64-linux-gnu
     env:
-      JULIA_PKG_SERVER: ""
+      # Same package server settings as .buildkite/pipeline.yml
+      JULIA_PKG_SERVER: us-east.pkg.julialang.org
+      JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       BB_PROJECT: ${{ github.workspace }}/.ci/bb1_project
       # Accept the macOS SDK license automatically (as Yggdrasil CI does)
       BINARYBUILDER_AUTOMATIC_APPLE: "true"
