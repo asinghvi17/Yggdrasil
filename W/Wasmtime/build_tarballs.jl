@@ -1,5 +1,8 @@
 using BinaryBuilder
 
+const YGGDRASIL_DIR = "../.."
+include(joinpath(YGGDRASIL_DIR, "platforms", "macos_sdks.jl"))
+
 name = "Wasmtime"
 version = v"50.0.1"
 
@@ -42,6 +45,11 @@ cmake --build . --target install
 
 install_license ${WORKSPACE}/srcdir/wasmtime/LICENSE
 """
+
+# `helpers.c` references `__unw_add_dynamic_fde`, which the default x86_64 macOS SDK (10.12)
+# does not export from libSystem; the SDK used on aarch64 (11.1) does. Use a newer SDK, but
+# keep the deployment target low so the minimum macOS version does not change.
+sources, script = require_macos_sdk("11.1", sources, script; deployment_target="10.12")
 
 platforms = supported_platforms(; exclude=(p -> !(arch(p) in ("x86_64", "aarch64"))))
 
