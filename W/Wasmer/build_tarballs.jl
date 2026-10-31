@@ -12,6 +12,9 @@ sources = [
     GitSource("https://github.com/wasmerio/napi",
               "82b328f50ddaac78de388b67b4707f21864b9245"),
     DirectorySource("./bundled"),
+    # Only used for aarch64-apple-darwin, see the script
+    ArchiveSource("https://github.com/roblabla/MacOSX-SDKs/releases/download/macosx14.0/MacOSX14.0.sdk.tar.xz",
+                  "4a31565fd2644d1aec23da3829977f83632a20985561a2038e198681e7e7bf49"),
 ]
 
 # Based on the `build-capi` and `package-capi` targets of wasmer/Makefile.
@@ -29,6 +32,9 @@ sources = [
 # - `wasmer` (lib/api) has an unconditional `bindgen` build-dependency that is only used by the
 #   `v8` backend. On a musl build host it uses clang-sys' `static` feature, which needs
 #   `libclang.a`, so the second patch makes it optional (enabled by `v8` only).
+# - On aarch64 macOS, wasmer-compiler registers compact unwind info with libunwind's
+#   `__unw_add_find_dynamic_unwind_sections`, which is only in the macOS 14 libSystem, so the
+#   default 11.0 SDK fails to link. We link against the 14.0 SDK and so require macOS 14.
 # - `wasi` enables WASI/WASIX (`wasi_*` functions), `wat` enables `wat2wasm` and
 #   `wasm_module_new` on text input, `middlewares` is part of upstream's default set.
 script = raw"""
@@ -42,6 +48,14 @@ rm -rf lib/napi
 cp -r ${WORKSPACE}/srcdir/napi lib/napi
 
 export CARGO_PROFILE_RELEASE_STRIP=debuginfo
+
+if [[ "${target}" == aarch64-apple-darwin* ]]; then
+    apple_sdk_root=${WORKSPACE}/srcdir/MacOSX14.0.sdk
+    # Point the compiler/linker wrappers to the newer SDK
+    grep -rIl "/opt/${bb_target}/${bb_target}/sys-root" /opt/bin/${bb_full_target} | \
+        xargs sed -i "s!/opt/${bb_target}/${bb_target}/sys-root!${apple_sdk_root}!"
+    export MACOSX_DEPLOYMENT_TARGET=14.0
+fi
 
 cargo build \
     --release \
