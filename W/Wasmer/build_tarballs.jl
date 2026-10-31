@@ -1,5 +1,8 @@
 using BinaryBuilder
 
+const YGGDRASIL_DIR = "../.."
+include(joinpath(YGGDRASIL_DIR, "platforms", "macos_sdks.jl"))
+
 name = "Wasmer"
 version = v"7.5.0"
 
@@ -26,18 +29,36 @@ sources = [
 #   `sys` by the same list of wasix features minus `host-reqwest`, `journal` (does not
 #   compile without the other features) and the mmap/mio ones that are not needed.
 #   WASI itself (`wasi_env_new`, `wasi_get_imports`, ...) is unaffected.
+# - `wasmer` (lib/api) has an unconditional `bindgen` build-dependency that is only used by the
+#   `v8` backend. On a musl build host it uses clang-sys' `static` feature, which needs
+#   `libclang.a`, so the second patch makes it optional (enabled by `v8` only).
+# - On aarch64 macOS, wasmer-compiler registers compact unwind info with libunwind's
+#   `__unw_add_find_dynamic_unwind_sections`, which is only in the macOS 14 libSystem, so the
+#   default 11.1 SDK fails to link. We link against the 14.0 SDK and so require macOS 14.
+#   x86_64 macOS doesn't use compact unwind and keeps the default SDK and deployment target.
+# - On riscv64, cc-rs (`wasmer-compiler`'s `libunwind.c`, `zstd-sys`, ...) passes `-march=rv64gc`,
+#   which BinaryBuilder's compiler wrapper rejects (it already targets riscv64gc). So cc-rs'
+#   default flags are disabled there, and the ones that matter are passed explicitly.
 # - `wasi` enables WASI/WASIX (`wasi_*` functions), `wat` enables `wat2wasm` and
 #   `wasm_module_new` on text input, `middlewares` is part of upstream's default set.
 script = raw"""
 cd ${WORKSPACE}/srcdir/wasmer/
 
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/capi-no-wasix-networking.patch
+atomic_patch -p1 ${WORKSPACE}/srcdir/patches/api-optional-bindgen.patch
 
 # The `lib/napi` submodule is not part of the git checkout
 rm -rf lib/napi
 cp -r ${WORKSPACE}/srcdir/napi lib/napi
 
 export CARGO_PROFILE_RELEASE_STRIP=debuginfo
+
+if [[ "${target}" == riscv64-* ]]; then
+    export CRATE_CC_NO_DEFAULTS=1
+    export "CFLAGS_${rust_target//-/_}=-O2 -fPIC -ffunction-sections -fdata-sections"
+    # `CRATE_CC_NO_DEFAULTS` also applies to the host (x86_64) build scripts
+    export HOST_CFLAGS="-O2 -fPIC"
+fi
 
 cargo build \
     --release \
@@ -66,6 +87,14 @@ install_license LICENSE
 # (Both files are called LICENSE, so `install_license` can't install them together)
 install -Dvm 0644 lib/c-api/tests/wasm-c-api/LICENSE "${prefix}/share/licenses/wasm-c-api/LICENSE"
 """
+
+# `require_macos_sdk` unpacks the SDK and sets the deployment target on all macOS platforms,
+# but only aarch64 needs it: restrict the helper's script to aarch64-apple-darwin.
+sdk_sources, sdk_script = require_macos_sdk("14.0", Any[], "")
+@assert occursin("== *-apple-darwin*", sdk_script)
+sdk_script = replace(sdk_script, "== *-apple-darwin*" => "== aarch64-apple-darwin*")
+sources = vcat(sources, sdk_sources)
+script = sdk_script * script
 
 # Wasmer's compilers only support 64-bit targets, and upstream builds the C API for x86_64,
 # aarch64 and riscv64 in CI
