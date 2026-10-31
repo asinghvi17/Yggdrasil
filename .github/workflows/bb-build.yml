@@ -1,0 +1,84 @@
+# Build a Yggdrasil recipe with BinaryBuilder on a GitHub-hosted runner.
+#
+# Runs on every push to `as/bb-ci`. Add (recipe, platform) pairs to the matrix
+# below to build more. Mirrors what `.buildkite/build.sh` does for BB1 recipes:
+# instantiate `.ci/bb1_project` (BinaryBuilder master) and run the recipe's
+# `build_tarballs.jl --verbose <platform>` with that project.
+name: BinaryBuilder build
+
+on:
+  push:
+    branches:
+      - as/bb-ci
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.recipe }} (${{ matrix.platform }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - recipe: W/WAMR
+            platform: x86_64-linux-gnu
+    env:
+      JULIA_PKG_SERVER: ""
+      BB_PROJECT: ${{ github.workspace }}/.ci/bb1_project
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: '1.13.2' # Same version as .buildkite/pipeline.yml and the Manifests
+
+      # BinaryBuilder's sandbox needs unprivileged user namespaces, which
+      # Ubuntu 24.04 restricts through AppArmor.
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          unshare --user --map-root-user --mount true && echo "user namespaces OK"
+
+      # Packages and artifacts (including the BinaryBuilder rootfs and compiler
+      # shards, which are the bulk of the download) live in the Julia depot.
+      - name: Cache Julia depot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia/packages
+            ~/.julia/artifacts
+            ~/.julia/compiled
+            ~/.julia/scratchspaces
+            ~/.julia/clones
+          key: bb-depot-${{ runner.os }}-${{ hashFiles('.ci/bb1_project/Manifest.toml') }}-${{ matrix.recipe }}-${{ matrix.platform }}
+          restore-keys: |
+            bb-depot-${{ runner.os }}-${{ hashFiles('.ci/bb1_project/Manifest.toml') }}-
+            bb-depot-${{ runner.os }}-
+
+      - name: Instantiate BinaryBuilder project
+        run: julia --color=yes --project="$BB_PROJECT" -e 'import Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Build
+        working-directory: ${{ matrix.recipe }}
+        run: |
+          # The parallel auditor can open lots of files
+          ulimit -n 65536
+          julia --color=yes --threads=auto --project="$BB_PROJECT" \
+            build_tarballs.jl --verbose ${{ matrix.platform }}
+
+      - name: Show products
+        if: always()
+        working-directory: ${{ matrix.recipe }}
+        run: ls -la products/ || true
+
+      - name: Upload products
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ replace(matrix.recipe, '/', '-') }}-${{ matrix.platform }}
+          path: ${{ matrix.recipe }}/products/*
+          if-no-files-found: error
