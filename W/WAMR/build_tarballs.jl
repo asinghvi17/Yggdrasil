@@ -61,14 +61,14 @@ esac
 # With these libiwasm has no `sigaction` import. This applies to all platforms.
 
 # WAMR's `invokeNative_*.s` assembly files have no `.note.GNU-stack` section, so the
-# assembler marks the objects as needing an executable stack, and so libiwasm gets a
+# assembler marks the objects as needing an executable stack, and libiwasm gets a
 # `GNU_STACK` program header with RWE flags (glibc >= 2.41 refuses to `dlopen` such
-# libraries). The `.s` files are not run through the C preprocessor, so the note can't
-# be added to them portably (it is invalid for Mach-O); instead have the assembler emit it
-# for ELF targets.
-ASM_FLAGS=""
+# libraries). The simplest robust fix in the recipe is to tell the linker to use a
+# non-executable stack on ELF targets (the Mach-O linker has no such option, and Darwin
+# has no `GNU_STACK` header anyway). The proper upstream fix is an `#if defined(__ELF__)`
+# guarded `.section .note.GNU-stack,"",%progbits` in the `invokeNative` assembly files.
 if [[ "${target}" != *-apple-darwin* ]]; then
-    ASM_FLAGS="-Wa,--noexecstack"
+    export LDFLAGS="${LDFLAGS} -Wl,-z,noexecstack"
 fi
 
 # Only the interpreters (classic + fast) are built: no AOT loader, no LLVM JIT.
@@ -78,7 +78,6 @@ cmake -B build -S . \
     -DCMAKE_INSTALL_PREFIX=${prefix} \
     -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TARGET_TOOLCHAIN} \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_ASM_FLAGS="${ASM_FLAGS}" \
     -DBUILD_SHARED_LIBS=ON \
     -DWAMR_BUILD_PLATFORM=${WAMR_PLATFORM} \
     -DWAMR_BUILD_TARGET=${WAMR_TARGET} \
