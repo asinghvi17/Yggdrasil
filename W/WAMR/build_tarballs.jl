@@ -60,6 +60,17 @@ esac
 #   WAMR_DISABLE_WAKEUP_BLOCKING_OP=1  no SIGUSR1 handler / signal mask changes
 # With these libiwasm has no `sigaction` import. This applies to all platforms.
 
+# WAMR's `invokeNative_*.s` assembly files have no `.note.GNU-stack` section, so the
+# assembler marks the objects as needing an executable stack, and libiwasm gets a
+# `GNU_STACK` program header with RWE flags (glibc >= 2.41 refuses to `dlopen` such
+# libraries). The simplest robust fix in the recipe is to tell the linker to use a
+# non-executable stack on ELF targets (the Mach-O linker has no such option, and Darwin
+# has no `GNU_STACK` header anyway). The proper upstream fix is an `#if defined(__ELF__)`
+# guarded `.section .note.GNU-stack,"",%progbits` in the `invokeNative` assembly files.
+if [[ "${target}" != *-apple-darwin* ]]; then
+    export LDFLAGS="${LDFLAGS} -Wl,-z,noexecstack"
+fi
+
 # Only the interpreters (classic + fast) are built: no AOT loader, no LLVM JIT.
 # The root CMakeLists.txt fetches SIMDe with `FetchContent` at configure time, which
 # needs network access; point it to the headers from SIMDe_jll instead.
