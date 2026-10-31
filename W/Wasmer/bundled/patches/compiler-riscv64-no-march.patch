@@ -1,0 +1,33 @@
+Don't let cc-rs pass `-march` when compiling `libunwind.c` on riscv64.
+
+`wasmer-compiler`'s build script compiles a tiny C probe (`libunwind.c`) with cc-rs,
+which adds `-march=rv64gc -mabi=lp64d` for riscv64 targets. BinaryBuilder's compiler
+wrapper already targets riscv64gc (with the right ABI) and refuses any `-march=` option
+("Cannot force an architecture via -march", exit status 1), so the build script fails.
+Disable cc-rs' default flags for riscv64 only, keeping `-O2` and `-fPIC`.
+
+Upstream: not yet reported.
+
+diff --git a/lib/compiler/build.rs b/lib/compiler/build.rs
+index cda81d2..3c7f926 100644
+--- a/lib/compiler/build.rs
++++ b/lib/compiler/build.rs
+@@ -2,9 +2,14 @@ fn main() {
+     println!("cargo:rerun-if-changed=src/engine/unwind/libunwind.c");
+ 
+     if std::env::var_os("CARGO_CFG_UNIX").is_some() {
+-        cc::Build::new()
+-            .file("src/engine/unwind/libunwind.c")
+-            .warnings(true)
+-            .compile("wasmer_unwind_detection");
++        let mut build = cc::Build::new();
++        build.file("src/engine/unwind/libunwind.c").warnings(true);
++        if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("riscv64") {
++            // cc-rs would add `-march=rv64gc -mabi=lp64d`; the BinaryBuilder
++            // compiler wrapper already sets the target ABI and rejects `-march`.
++            // Keep the optimization level and PIC that the default flags provide.
++            build.no_default_flags(true).flag("-O2").flag("-fPIC");
++        }
++        build.compile("wasmer_unwind_detection");
+     }
+ }

@@ -1,5 +1,8 @@
 using BinaryBuilder
 
+const YGGDRASIL_DIR = "../.."
+include(joinpath(YGGDRASIL_DIR, "platforms", "macos_sdks.jl"))
+
 name = "Wasmer"
 version = v"7.5.0"
 
@@ -12,9 +15,6 @@ sources = [
     GitSource("https://github.com/wasmerio/napi",
               "82b328f50ddaac78de388b67b4707f21864b9245"),
     DirectorySource("./bundled"),
-    # Only used for aarch64-apple-darwin, see the script
-    ArchiveSource("https://github.com/roblabla/MacOSX-SDKs/releases/download/macosx14.0/MacOSX14.0.sdk.tar.xz",
-                  "4a31565fd2644d1aec23da3829977f83632a20985561a2038e198681e7e7bf49"),
 ]
 
 # Based on the `build-capi` and `package-capi` targets of wasmer/Makefile.
@@ -34,7 +34,10 @@ sources = [
 #   `libclang.a`, so the second patch makes it optional (enabled by `v8` only).
 # - On aarch64 macOS, wasmer-compiler registers compact unwind info with libunwind's
 #   `__unw_add_find_dynamic_unwind_sections`, which is only in the macOS 14 libSystem, so the
-#   default 11.0 SDK fails to link. We link against the 14.0 SDK and so require macOS 14.
+#   default 11.1 SDK fails to link. We link against the 14.0 SDK and so require macOS 14.
+#   x86_64 macOS doesn't use compact unwind and keeps the default SDK and deployment target.
+# - cc-rs passes `-march=rv64gc` on riscv64 for `wasmer-compiler`'s `libunwind.c`, which
+#   BinaryBuilder's compiler wrapper rejects, so the third patch disables the default flags there.
 # - `wasi` enables WASI/WASIX (`wasi_*` functions), `wat` enables `wat2wasm` and
 #   `wasm_module_new` on text input, `middlewares` is part of upstream's default set.
 script = raw"""
@@ -42,20 +45,13 @@ cd ${WORKSPACE}/srcdir/wasmer/
 
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/capi-no-wasix-networking.patch
 atomic_patch -p1 ${WORKSPACE}/srcdir/patches/api-optional-bindgen.patch
+atomic_patch -p1 ${WORKSPACE}/srcdir/patches/compiler-riscv64-no-march.patch
 
 # The `lib/napi` submodule is not part of the git checkout
 rm -rf lib/napi
 cp -r ${WORKSPACE}/srcdir/napi lib/napi
 
 export CARGO_PROFILE_RELEASE_STRIP=debuginfo
-
-if [[ "${target}" == aarch64-apple-darwin* ]]; then
-    apple_sdk_root=${WORKSPACE}/srcdir/MacOSX14.0.sdk
-    # Point the compiler/linker wrappers to the newer SDK
-    grep -rIl "/opt/${bb_target}/${bb_target}/sys-root" /opt/bin/${bb_full_target} | \
-        xargs sed -i "s!/opt/${bb_target}/${bb_target}/sys-root!${apple_sdk_root}!"
-    export MACOSX_DEPLOYMENT_TARGET=14.0
-fi
 
 cargo build \
     --release \
@@ -85,6 +81,14 @@ install_license LICENSE
 install -Dvm 0644 lib/c-api/tests/wasm-c-api/LICENSE "${prefix}/share/licenses/wasm-c-api/LICENSE"
 """
 
+# `require_macos_sdk` unpacks the SDK and sets the deployment target on all macOS platforms,
+# but only aarch64 needs it: restrict the helper's script to aarch64-apple-darwin.
+sdk_sources, sdk_script = require_macos_sdk("14.0", Any[], "")
+@assert occursin("== *-apple-darwin*", sdk_script)
+sdk_script = replace(sdk_script, "== *-apple-darwin*" => "== aarch64-apple-darwin*")
+sources = vcat(sources, sdk_sources)
+script = sdk_script * script
+
 # Wasmer's compilers only support 64-bit targets, and upstream builds the C API for x86_64,
 # aarch64 and riscv64 in CI
 platforms = supported_platforms(; exclude=(p -> !(arch(p) in ("x86_64", "aarch64", "riscv64"))))
@@ -110,7 +114,4 @@ products = [LibraryProduct("libwasmer", :libwasmer)]
 dependencies = Dependency[]
 
 build_tarballs(ARGS, name, version, sources, script, platforms, products, dependencies;
-               compilers=[:c, :rust], julia_compat="1.6",
-               # cc-rs passes `-march=rv64gc -mabi=lp64d` on riscv64 (for wasmer-compiler's
-               # `libunwind.c`), which BinaryBuilder's compiler wrapper rejects by default
-               lock_microarchitecture=false)
+               compilers=[:c, :rust], julia_compat="1.6")
